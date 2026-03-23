@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)"
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(find /c/Users/rohan.chadha/10x/yt-dashboard-2 -name prisma.schema -o -name drizzle.config.* -o -name .env* -o -name package.json)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
