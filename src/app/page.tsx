@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Header from "@/components/layout/Header";
 import TabNav, { Tab } from "@/components/layout/TabNav";
 import OverviewTab from "@/components/overview/OverviewTab";
@@ -9,6 +9,7 @@ import TrafficSourcesTab from "@/components/traffic-sources/TrafficSourcesTab";
 import AudienceTab from "@/components/audience/AudienceTab";
 import RetentionTab from "@/components/retention/RetentionTab";
 import KeyInsights from "@/components/key-insights/KeyInsights";
+import GlossaryTab from "@/components/glossary/GlossaryTab";
 import type { DashboardData } from "@/types/dashboard";
 
 function toDateStr(d: Date) {
@@ -20,6 +21,7 @@ const defaultTo = toDateStr(new Date(today.getFullYear(), today.getMonth(), toda
 const defaultFrom = toDateStr(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 14));
 
 export default function Home() {
+  const cacheRef = useRef<Map<string, Partial<DashboardData>>>(new Map());
   const [tab, setTab] = useState<Tab>("overview");
   const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState(defaultTo);
@@ -39,6 +41,16 @@ export default function Home() {
 
   const fetchAll = useCallback(async (f: string, t: string, ci: number) => {
     if (!f || !t || f > t) return; // guard against invalid ranges
+
+    const cacheKey = `${f}|${t}|${ci}`;
+    const cached = cacheRef.current.get(cacheKey);
+    if (cached) {
+      setData(cached);
+      setConfigured(true);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const [overviewRes, videosRes, trafficRes, audienceRes, retentionRes] = await Promise.all([
@@ -76,7 +88,7 @@ export default function Home() {
         setActiveYears([]);
       }
 
-      setData({
+      const newData: Partial<DashboardData> = {
         channelName: overview.channelName,
         summary: overview.summary,
         daily: overview.daily,
@@ -92,7 +104,9 @@ export default function Home() {
         retentionData: retention.retentionData,
         relativeData: retention.relativeData,
         videoMeta: retention.videoMeta,
-      });
+      };
+      cacheRef.current.set(cacheKey, newData);
+      setData(newData);
     } catch (err) {
       // fetchAll already set configured=true above, so only reset on genuine 401s.
       // Unexpected JS errors (parse failures, network blips) shouldn't wipe the dashboard.
@@ -138,7 +152,8 @@ export default function Home() {
       )}
 
       {loading && (
-        <div className="mx-6 mt-4 px-4 py-3 rounded-lg text-sm" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+        <div className="mx-6 mt-4 px-4 py-3 rounded-lg text-sm flex items-center gap-2" style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+          <span className="animate-spin inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent shrink-0" />
           Loading analytics…
         </div>
       )}
@@ -184,8 +199,9 @@ export default function Home() {
         {tab === "video-performance" && <VideoPerformanceTab data={data?.videos} from={from} to={to} />}
         {tab === "traffic-sources" && <TrafficSourcesTab sources={data?.trafficSources} dailyTraffic={data?.dailyTraffic} />}
         {tab === "audience" && <AudienceTab data={data?.audience} />}
-        {tab === "retention" && <RetentionTab retentionData={data?.retentionData} relativeData={data?.relativeData} videoMeta={data?.videoMeta} />}
+        {tab === "retention" && <RetentionTab retentionData={data?.retentionData} relativeData={data?.relativeData} videoMeta={data?.videoMeta} from={from} to={to} channelIndex={channelIndex} />}
         {tab === "key-insights" && <KeyInsights data={data ?? undefined} />}
+        {tab === "glossary" && <GlossaryTab />}
       </main>
     </div>
   );

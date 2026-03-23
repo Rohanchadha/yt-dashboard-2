@@ -5,6 +5,47 @@ import { validateChannelParam } from "@/lib/api-utils";
 
 const VIDEO_COLORS = ["#ef4444", "#06b6d4", "#a855f7", "#f97316", "#22c55e", "#f59e0b"];
 
+/** Split an array into chunks of at most `size`. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Fetch an Analytics metric for a set of video IDs, batching into groups of 50
+ * to stay within the YouTube Analytics filter URL-length limit.
+ * Returns a merged videoId → views map.
+ */
+async function batchAnalyticsViews(
+  auth: ReturnType<typeof import("@/lib/youtube-client").getAuthenticatedClientForChannel>,
+  channelId: string,
+  videoIds: string[],
+  startDate: string,
+  endDate: string,
+): Promise<Record<string, number>> {
+  const batches = chunk(videoIds, 50);
+  const results = await Promise.all(
+    batches.map((ids) =>
+      youtubeAnalytics.reports.query({
+        auth,
+        ids: `channel==${channelId}`,
+        startDate,
+        endDate,
+        metrics: "views",
+        dimensions: "video",
+        filters: `video==${ids.join(",")}`,
+        maxResults: 200,
+      }),
+    ),
+  );
+  const merged: Record<string, number> = {};
+  for (const res of results) {
+    Object.assign(merged, indexByVideoId(res.data.rows));
+  }
+  return merged;
+}
+
 export async function GET(req: NextRequest) {
   const validated = validateChannelParam(req);
   if (validated instanceof NextResponse) return validated;
@@ -17,12 +58,11 @@ export async function GET(req: NextRequest) {
   const auth = getAuthenticatedClientForChannel(channelIndex);
   const today = new Date();
 
-  // Get channel ID
   const channelId = await resolveChannelId(auth, channelIndex);
 
-  // Step 1 & 2: 48h and prior-48h views for all videos (no video filter — get whatever is active)
-  // YouTube Analytics has a ~2-day processing delay, so we shift both windows back by 2 days
-  // to ensure data is actually available. last48h = days 3-4 ago, prior48h = days 5-6 ago.
+  // Step 1: 48h and prior-48h views across all videos (no filter — discover active videos).
+  // YouTube Analytics has a ~2-day processing delay, so both windows are shifted back 2 days
+  // to ensure settled data. last48h = days 3–4 ago; prior48h = days 5–6 ago.
   const [last48Res, prior48Res] = await Promise.all([
     youtubeAnalytics.reports.query({
       auth,
@@ -32,7 +72,7 @@ export async function GET(req: NextRequest) {
       metrics: "views",
       dimensions: "video",
       sort: "-views",
-      maxResults: 25,
+      maxResults: 200,
     }),
     youtubeAnalytics.reports.query({
       auth,
@@ -42,7 +82,7 @@ export async function GET(req: NextRequest) {
       metrics: "views",
       dimensions: "video",
       sort: "-views",
-      maxResults: 25,
+      maxResults: 200,
     }),
   ]);
 
@@ -50,82 +90,48 @@ export async function GET(req: NextRequest) {
   const prior48Map = indexByVideoId(prior48Res.data.rows);
 
   // Union of video IDs from both windows
-  const videoIdSet = new Set([
-    ...Object.keys(last48Map),
-    ...Object.keys(prior48Map),
-  ]);
-  const videoIds = [...videoIdSet];
+  const videoIds = [...new Set([...Object.keys(last48Map), ...Object.keys(prior48Map)])];
 
   if (videoIds.length === 0) {
     return NextResponse.json({ trending: [] });
   }
 
-  const videoFilter = `video==${videoIds.join(",")}`;
+  // Step 2: metadata + classification signals.
+  // youtube.videos.list accepts max 50 IDs per request — batch into chunks of 50.
+  // Analytics filter queries are also batched at 50 IDs to stay within URL length limits.
+  const [detailsItems, last7Map, prior7Map, last30Map, prior30Map] = await Promise.all([
+    // Metadata: title, publishedAt, duration, totalViews
+    Promise.all(
+      chunk(videoIds, 50).map((ids) =>
+        youtube.videos.list({
+          auth,
+          part: ["snippet", "contentDetails", "statistics"],
+          id: ids,
+        }),
+      ),
+    ).then((responses) => responses.flatMap((r) => r.data.items ?? [])),
 
-  // Step 3 & 4: metadata + classification signals in parallel
-  const [detailsRes, last7Res, prior7Res, last30Res, prior30Res] = await Promise.all([
-    youtube.videos.list({
-      auth,
-      part: ["snippet", "contentDetails", "statistics"],
-      id: videoIds,
-    }),
-    youtubeAnalytics.reports.query({
-      auth,
-      ids: `channel==${channelId}`,
-      startDate: offsetDate(today, -7),
-      endDate: offsetDate(today, -1),
-      metrics: "views",
-      dimensions: "video",
-      filters: videoFilter,
-    }),
-    youtubeAnalytics.reports.query({
-      auth,
-      ids: `channel==${channelId}`,
-      startDate: offsetDate(today, -14),
-      endDate: offsetDate(today, -8),
-      metrics: "views",
-      dimensions: "video",
-      filters: videoFilter,
-    }),
-    youtubeAnalytics.reports.query({
-      auth,
-      ids: `channel==${channelId}`,
-      startDate: offsetDate(today, -30),
-      endDate: offsetDate(today, -1),
-      metrics: "views",
-      dimensions: "video",
-      filters: videoFilter,
-    }),
-    youtubeAnalytics.reports.query({
-      auth,
-      ids: `channel==${channelId}`,
-      startDate: offsetDate(today, -60),
-      endDate: offsetDate(today, -31),
-      metrics: "views",
-      dimensions: "video",
-      filters: videoFilter,
-    }),
+    // Weekly velocity signals
+    batchAnalyticsViews(auth, channelId, videoIds, offsetDate(today, -7), offsetDate(today, -1)),
+    batchAnalyticsViews(auth, channelId, videoIds, offsetDate(today, -14), offsetDate(today, -8)),
+
+    // Monthly velocity / evergreen signals
+    batchAnalyticsViews(auth, channelId, videoIds, offsetDate(today, -30), offsetDate(today, -1)),
+    batchAnalyticsViews(auth, channelId, videoIds, offsetDate(today, -60), offsetDate(today, -31)),
   ]);
 
-  const last7Map = indexByVideoId(last7Res.data.rows);
-  const prior7Map = indexByVideoId(prior7Res.data.rows);
-  const last30Map = indexByVideoId(last30Res.data.rows);
-  const prior30Map = indexByVideoId(prior30Res.data.rows);
-
-  // Metadata maps
+  // Build metadata maps
   const titleMap: Record<string, string> = {};
   const publishedAtMap: Record<string, string> = {};
   const shortMap: Record<string, boolean> = {};
   const totalViewsMap: Record<string, number> = {};
-  const durationMap: Record<string, number> = {};
 
-  for (const item of detailsRes.data.items ?? []) {
+  for (const item of detailsItems) {
     if (!item.id) continue;
     titleMap[item.id] = item.snippet?.title ?? "";
     publishedAtMap[item.id] = item.snippet?.publishedAt ?? new Date().toISOString();
     shortMap[item.id] = parseDurationSec(item.contentDetails?.duration ?? "") <= 60;
     totalViewsMap[item.id] = parseInt(item.statistics?.viewCount ?? "0");
-    durationMap[item.id] = parseDurationSec(item.contentDetails?.duration ?? "");
   }
 
   const trending = videoIds.map((videoId, i) => {
@@ -145,8 +151,6 @@ export async function GET(req: NextRequest) {
       viewsLast7Days: last7Map[videoId] ?? null,
       priorWeekViews: prior7Map[videoId] ?? null,
       priorMonthViews: prior30Map[videoId] ?? null,
-      ctr: null,
-      channelAvgCtr: null,
     });
 
     return {

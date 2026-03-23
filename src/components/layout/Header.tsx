@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun, Youtube, ChevronDown, Check } from "lucide-react";
+import { Moon, Sun, ChevronDown, Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { channelInfo } from "@/data/mock";
 
@@ -15,7 +15,7 @@ interface HeaderProps {
 }
 
 export default function Header({ from, to, onApply, channelName, channels = [], channelIndex = 1, onChannelChange }: HeaderProps) {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("light");
   const [draftFrom, setDraftFrom] = useState(from);
   const [draftTo, setDraftTo] = useState(to);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -43,8 +43,14 @@ export default function Header({ from, to, onApply, channelName, channels = [], 
 
   const isDirty = draftFrom !== from || draftTo !== to;
 
+  const rangeDays =
+    draftFrom && draftTo && draftTo >= draftFrom
+      ? Math.round((new Date(draftTo).getTime() - new Date(draftFrom).getTime()) / 86400000) + 1
+      : 0;
+  const rangeError = rangeDays > 60 ? "Date range cannot exceed 60 days." : null;
+
   const handleApply = () => {
-    if (draftFrom && draftTo && draftFrom <= draftTo) {
+    if (draftFrom && draftTo && draftFrom <= draftTo && !rangeError) {
       onApply(draftFrom, draftTo);
     }
   };
@@ -59,9 +65,8 @@ export default function Header({ from, to, onApply, channelName, channels = [], 
     >
       {/* Left: Logo + title */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-[#ef4444] rounded-lg flex items-center justify-center">
-          <Youtube size={22} color="white" fill="white" />
-        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Logo" width={40} height={40} style={{ borderRadius: 8, objectFit: "contain" }} />
         <div>
           <div className="font-bold text-base" style={{ color: "var(--text-primary)" }}>
             YouTube Analytics Dashboard
@@ -117,52 +122,59 @@ export default function Header({ from, to, onApply, channelName, channels = [], 
       {/* Right: date range + toggle + badge */}
       <div className="flex items-center gap-4">
         {/* Date inputs + apply */}
-        <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-          <span>From:</span>
-          <input
-            type="date"
-            value={draftFrom}
-            onChange={(e) => setDraftFrom(e.target.value)}
-            style={{
-              background: "var(--bg-page)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              borderRadius: 6,
-              padding: "3px 8px",
-              fontSize: 13,
-            }}
-          />
-          <span>To:</span>
-          <input
-            type="date"
-            value={draftTo}
-            onChange={(e) => setDraftTo(e.target.value)}
-            style={{
-              background: "var(--bg-page)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-              borderRadius: 6,
-              padding: "3px 8px",
-              fontSize: 13,
-            }}
-          />
-          <button
-            onClick={handleApply}
-            disabled={!isDirty || !draftFrom || !draftTo || draftFrom > draftTo}
-            style={{
-              background: isDirty ? "#ef4444" : "var(--bg-page)",
-              border: `1px solid ${isDirty ? "#ef4444" : "var(--border)"}`,
-              color: isDirty ? "#fff" : "var(--text-secondary)",
-              borderRadius: 6,
-              padding: "3px 12px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: isDirty ? "pointer" : "default",
-              transition: "all 0.15s",
-            }}
-          >
-            Apply
-          </button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <span>From:</span>
+            <input
+              type="date"
+              value={draftFrom}
+              onChange={(e) => setDraftFrom(e.target.value)}
+              style={{
+                background: "var(--bg-page)",
+                border: `1px solid ${rangeError ? "#ef4444" : "var(--border)"}`,
+                color: "var(--text-primary)",
+                borderRadius: 6,
+                padding: "3px 8px",
+                fontSize: 13,
+              }}
+            />
+            <span>To:</span>
+            <input
+              type="date"
+              value={draftTo}
+              onChange={(e) => setDraftTo(e.target.value)}
+              style={{
+                background: "var(--bg-page)",
+                border: `1px solid ${rangeError ? "#ef4444" : "var(--border)"}`,
+                color: "var(--text-primary)",
+                borderRadius: 6,
+                padding: "3px 8px",
+                fontSize: 13,
+              }}
+            />
+            <button
+              onClick={handleApply}
+              disabled={!isDirty || !draftFrom || !draftTo || draftFrom > draftTo || !!rangeError}
+              style={{
+                background: isDirty && !rangeError ? "#ef4444" : "var(--bg-page)",
+                border: `1px solid ${isDirty && !rangeError ? "#ef4444" : "var(--border)"}`,
+                color: isDirty && !rangeError ? "#fff" : "var(--text-secondary)",
+                borderRadius: 6,
+                padding: "3px 12px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: isDirty && !rangeError ? "pointer" : "default",
+                transition: "all 0.15s",
+              }}
+            >
+              Apply
+            </button>
+          </div>
+          {rangeError && (
+            <div style={{ fontSize: 12, color: "#ef4444", fontWeight: 500 }}>
+              ⚠ {rangeError}
+            </div>
+          )}
         </div>
 
         {/* Dark/Light toggle */}

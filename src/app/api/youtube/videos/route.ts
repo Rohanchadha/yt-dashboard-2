@@ -7,12 +7,14 @@ const VIDEO_COLORS = ["#ef4444", "#06b6d4", "#a855f7", "#f97316", "#22c55e", "#f
 
 /** Safe wrapper: returns null rows if the analytics query fails (e.g. metric unavailable). */
 async function safeQuery(
+  label: string,
   fn: () => Promise<{ data: { rows?: unknown[][] | null } }>,
 ): Promise<unknown[][] | null> {
   try {
     const res = await fn();
     return (res.data.rows as unknown[][] | null | undefined) ?? null;
-  } catch {
+  } catch (err) {
+    console.warn(`[videos] safeQuery "${label}" failed:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -56,7 +58,7 @@ export async function GET(req: NextRequest) {
   // so a single failing metric doesn't crash the whole route.
   const [
     titlesRes,
-    extendedRows,    // impressions, CTR, avgViewPct — may be null if unavailable
+    avgViewPctRows,
     last7Rows,
     prior7Rows,
     last30Rows,
@@ -70,20 +72,20 @@ export async function GET(req: NextRequest) {
       part: ["snippet", "contentDetails", "statistics"],
       id: videoIds,
     }),
-    // Extended metrics (impressions/CTR not available on all channels — guarded)
-    safeQuery(() =>
+    // Avg view percentage
+    safeQuery("avgViewPercentage", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
         startDate: from,
         endDate: to,
-        metrics: "impressions,impressionClickThroughRate,averageViewPercentage",
+        metrics: "averageViewPercentage",
         dimensions: "video",
         filters: videoFilter,
       }),
     ),
     // Velocity windows — all guarded
-    safeQuery(() =>
+    safeQuery("last7", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
         filters: videoFilter,
       }),
     ),
-    safeQuery(() =>
+    safeQuery("prior7", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
@@ -105,7 +107,7 @@ export async function GET(req: NextRequest) {
         filters: videoFilter,
       }),
     ),
-    safeQuery(() =>
+    safeQuery("last30", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
@@ -116,7 +118,7 @@ export async function GET(req: NextRequest) {
         filters: videoFilter,
       }),
     ),
-    safeQuery(() =>
+    safeQuery("prior30", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
@@ -127,7 +129,7 @@ export async function GET(req: NextRequest) {
         filters: videoFilter,
       }),
     ),
-    safeQuery(() =>
+    safeQuery("last2", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
@@ -139,7 +141,7 @@ export async function GET(req: NextRequest) {
       }),
     ),
     // EventScore: daily per-video breakdown for the first 7 days of the period
-    safeQuery(() =>
+    safeQuery("dailyEvent", () =>
       youtubeAnalytics.reports.query({
         auth,
         ids: `channel==${channelId}`,
@@ -152,11 +154,10 @@ export async function GET(req: NextRequest) {
     ),
   ]);
 
-  // Build extended metrics map: videoId → { impressions, ctr, avgViewPct }
-  const extendedMap: Record<string, { impressions: number; ctr: number; avgViewPct: number }> = {};
-  for (const row of extendedRows ?? []) {
-    const [videoId, impressions, ctr, avgViewPct] = row as [string, number, number, number];
-    if (videoId) extendedMap[videoId] = { impressions, ctr, avgViewPct };
+  const avgViewPctMap: Record<string, number> = {};
+  for (const row of avgViewPctRows ?? []) {
+    const [videoId, avgViewPct] = row as [string, number];
+    if (videoId) avgViewPctMap[videoId] = avgViewPct;
   }
 
   const last7Map = indexByVideoId(last7Rows);
@@ -200,17 +201,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Channel avg CTR from extended metrics (null if unavailable)
-  const ctrs = Object.values(extendedMap)
-    .map((e) => e.ctr)
-    .filter((c) => c > 0);
-  const channelAvgCtr = ctrs.length > 0 ? ctrs.reduce((a, b) => a + b, 0) / ctrs.length : null;
-
   const videos = rows.map((row, i) => {
     const [videoId, views, watchMins, avgDur, likes, comments, shares, subsGained] =
       row as [string, ...number[]];
 
-    const ext = extendedMap[videoId];
     const publishedAt = publishedAtMap[videoId] ?? new Date().toISOString();
     const totalViews = totalViewsMap[videoId] ?? Math.round(views);
 
@@ -223,8 +217,6 @@ export async function GET(req: NextRequest) {
       viewsLast7Days: last7Map[videoId] ?? null,
       priorWeekViews: prior7Map[videoId] ?? null,
       priorMonthViews: prior30Map[videoId] ?? null,
-      ctr: ext?.ctr ?? null,
-      channelAvgCtr,
     });
 
     return {
@@ -239,7 +231,6 @@ export async function GET(req: NextRequest) {
       totalComments: totalCommentsMap[videoId] ?? 0,
       durationSeconds: durationMap[videoId] ?? Math.round(avgDur),
       views: Math.round(views),
-      engaged: Math.round(views * 0.35),
       likes: Math.round(likes),
       comments: Math.round(comments),
       shares: Math.round(shares),
@@ -247,9 +238,7 @@ export async function GET(req: NextRequest) {
       avgDurationSec: Math.round(avgDur),
       subsGained: Math.round(subsGained),
       avgViewDurationSeconds: avgDur != null ? Math.round(avgDur) : null,
-      avgViewPercentage: ext?.avgViewPct != null ? Math.round(ext.avgViewPct * 10) / 10 : null,
-      impressions: ext?.impressions != null ? Math.round(ext.impressions) : null,
-      ctr: ext?.ctr != null ? Math.round(ext.ctr * 1000) / 10 : null,
+      avgViewPercentage: avgViewPctMap[videoId] != null ? Math.round(avgViewPctMap[videoId] * 10) / 10 : null,
       viewsLast7Days: last7Map[videoId] ?? null,
       viewsLast28Days: last30Map[videoId] ?? null,
       viewsLast48Hours: last2Map[videoId] ?? null,

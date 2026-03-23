@@ -20,19 +20,21 @@ const TIPS: Record<string, string> = {
   TYPE: "SHORT = content ≤ 60 s. VIDEO = standard long-form content.",
   CLASS: "Lifecycle label derived from view patterns.",
   VIEWS: "Total views in the selected date range.",
-  ENGAGED: "Viewers who liked, commented, shared, or subscribed after watching.",
   LIKES: "Total likes received.",
   COMMENTS: "Total comments left on the video.",
   SHARES: "Total times the video was shared.",
   "WATCH TIME": "Total hours watched = estimatedMinutesWatched ÷ 60.",
   "AVG DUR": "Average watch time per view (MM:SS).",
   SUBS: "Net new subscribers gained from this video.",
-  IMPRESSIONS: "Times your thumbnail was shown to viewers on YouTube.",
-  CTR: "Click-through rate = clicks ÷ impressions × 100.",
   "AVG VIEW %": "Average percentage of the video each viewer watched.",
-  "EVENT SCORE": "% of lifetime views that came in the first 3 days.",
-  "WEEKLY VEL": "Views (last 7 days) ÷ views (prior 7 days). >1× = growing week-over-week.",
-  "MONTHLY VEL": "Views (last 30 days) ÷ views (prior 30 days). >1× = growing month-over-month.",
+  "EVENT SCORE": "% of lifetime views that came in the first 3 days. Null for videos < 7 days old.",
+  "EVERGREEN": "Monthly Retention Ratio: last-30d views ÷ avg-monthly-views × 100. 100 = on historical average pace. Null for videos < 90 days old.",
+  "LAST 30D": "Total views in the last 30 days.",
+  "AVG MONTHLY": "Average monthly views over the video's lifetime = Lifetime Views ÷ Age-in-Months.",
+  "VIEWS/DAY": "Average daily views over the video's entire lifetime.",
+  "AGE": "Number of days since the video was published.",
+  "WEEKLY VEL": "Views (last 7 days) ÷ views (prior 7 days). >1× = growing. Null for videos ≤ 15 days old.",
+  "MONTHLY VEL": "Views (last 30 days) ÷ views (prior 30 days). >1× = growing. Null for videos < 60 days old.",
 };
 
 type SortDir = "asc" | "desc";
@@ -123,6 +125,15 @@ function formatDuration(totalSec: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+function ageInDays(publishedAt: string): number {
+  return Math.max(1, Math.floor((Date.now() - new Date(publishedAt).getTime()) / 86400000));
+}
+
+function avgMonthlyViews(video: VideoWithMetrics): number {
+  const age = ageInDays(video.publishedAt);
+  return video.totalViews > 0 ? Math.round(video.totalViews / (age / 30)) : 0;
+}
+
 function getValue(video: VideoWithMetrics, col: string): string | number {
   switch (col) {
     case "TITLE":        return video.title;
@@ -130,17 +141,19 @@ function getValue(video: VideoWithMetrics, col: string): string | number {
     case "TYPE":         return video.isShort ? 0 : 1;
     case "CLASS":        return video.derived.classification;
     case "VIEWS":        return video.views;
-    case "ENGAGED":      return video.engaged;
     case "LIKES":        return video.likes;
     case "COMMENTS":     return video.comments;
     case "SHARES":       return video.shares;
     case "WATCH TIME":   return video.watchTimeHours;
     case "AVG DUR":      return video.avgDurationSec;
     case "SUBS":         return video.subsGained;
-    case "IMPRESSIONS":  return video.impressions ?? -1;
-    case "CTR":          return video.ctr ?? -1;
     case "AVG VIEW %":   return video.avgViewPercentage ?? -1;
     case "EVENT SCORE":  return video.derived.eventScore ?? -1;
+    case "EVERGREEN":    return video.derived.evergreenScore ?? -1;
+    case "LAST 30D":     return video.viewsLast28Days ?? -1;
+    case "AVG MONTHLY":  return avgMonthlyViews(video);
+    case "VIEWS/DAY":    return video.derived.viewsPerDayOfLife;
+    case "AGE":          return ageInDays(video.publishedAt);
     case "WEEKLY VEL":   return video.derived.weeklyViewVelocity ?? -1;
     case "MONTHLY VEL":  return video.derived.monthlyViewVelocity ?? -1;
     default:             return 0;
@@ -206,17 +219,19 @@ export default function CreatedInPeriodList({
               <TH {...thProps("TYPE", TH_STYLE)} />
               <TH {...thProps("CLASS", TH_STYLE)} />
               <TH {...thProps("VIEWS", TH_STYLE)} />
-              <TH {...thProps("ENGAGED", TH_STYLE)} />
               <TH {...thProps("LIKES", TH_STYLE)} />
               <TH {...thProps("COMMENTS", TH_STYLE)} />
               <TH {...thProps("SHARES", TH_STYLE)} />
               <TH {...thProps("WATCH TIME", TH_STYLE)} />
               <TH {...thProps("AVG DUR", TH_STYLE)} />
               <TH {...thProps("SUBS", TH_STYLE)} />
-              <TH {...thProps("IMPRESSIONS", TH_STYLE)} />
-              <TH {...thProps("CTR", TH_STYLE)} />
               <TH {...thProps("AVG VIEW %", TH_STYLE)} />
               <TH {...thProps("EVENT SCORE", TH_STYLE)} />
+              <TH {...thProps("EVERGREEN", TH_STYLE)} />
+              <TH {...thProps("LAST 30D", TH_STYLE)} />
+              <TH {...thProps("AVG MONTHLY", TH_STYLE)} />
+              <TH {...thProps("VIEWS/DAY", TH_STYLE)} />
+              <TH {...thProps("AGE", TH_STYLE)} />
               <TH {...thProps("WEEKLY VEL", TH_STYLE)} />
               <TH {...thProps("MONTHLY VEL", TH_STYLE)} />
             </tr>
@@ -271,34 +286,40 @@ export default function CreatedInPeriodList({
 
                   {/* Classification badge */}
                   <td style={{ ...TD_STYLE, textAlign: "center" }}>
-                    <span style={{
-                      fontSize: "11px", fontWeight: 700, padding: "2px 7px", borderRadius: "4px",
-                      background: cls.bg, color: cls.color, whiteSpace: "nowrap",
-                    }}>
-                      {cls.label}
-                    </span>
+                    {video.derived.classification !== "unknown" ? (
+                      <span style={{
+                        fontSize: "11px", fontWeight: 700, padding: "2px 7px", borderRadius: "4px",
+                        background: cls.bg, color: cls.color, whiteSpace: "nowrap",
+                      }}>
+                        {cls.label}
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--text-secondary)" }}>—</span>
+                    )}
                   </td>
 
                   <td style={TD_STYLE}>{video.views.toLocaleString()}</td>
-                  <td style={TD_STYLE}>{video.engaged.toLocaleString()}</td>
                   <td style={TD_STYLE}>{video.likes.toLocaleString()}</td>
                   <td style={TD_STYLE}>{video.comments.toLocaleString()}</td>
                   <td style={TD_STYLE}>{video.shares.toLocaleString()}</td>
                   <td style={TD_STYLE}>{video.watchTimeHours}h</td>
                   <td style={TD_STYLE}>{formatDuration(video.avgDurationSec)}</td>
                   <td style={TD_STYLE}>{video.subsGained.toLocaleString()}</td>
-                  <td style={{ ...TD_STYLE, color: video.impressions != null ? "#06b6d4" : "var(--text-secondary)" }}>
-                    {video.impressions != null ? video.impressions.toLocaleString() : "—"}
-                  </td>
-                  <td style={{ ...TD_STYLE, color: video.ctr != null ? "#06b6d4" : "var(--text-secondary)" }}>
-                    {video.ctr != null ? `${video.ctr}%` : "—"}
-                  </td>
                   <td style={{ ...TD_STYLE, color: video.avgViewPercentage != null ? "#06b6d4" : "var(--text-secondary)" }}>
                     {video.avgViewPercentage != null ? `${video.avgViewPercentage}%` : "—"}
                   </td>
                   <td style={{ ...TD_STYLE, color: video.derived.eventScore != null ? "#06b6d4" : "var(--text-secondary)" }}>
                     {video.derived.eventScore != null ? `${video.derived.eventScore}%` : "—"}
                   </td>
+                  <td style={{ ...TD_STYLE, color: video.derived.evergreenScore != null ? "#22c55e" : "var(--text-secondary)" }}>
+                    {video.derived.evergreenScore != null ? `${video.derived.evergreenScore}` : "—"}
+                  </td>
+                  <td style={{ ...TD_STYLE, color: video.viewsLast28Days != null ? "#06b6d4" : "var(--text-secondary)" }}>
+                    {video.viewsLast28Days != null ? video.viewsLast28Days.toLocaleString() : "—"}
+                  </td>
+                  <td style={TD_STYLE}>{avgMonthlyViews(video).toLocaleString()}</td>
+                  <td style={TD_STYLE}>{video.derived.viewsPerDayOfLife}</td>
+                  <td style={{ ...TD_STYLE, color: "var(--text-secondary)" }}>{ageInDays(video.publishedAt)}d</td>
                   <td style={TD_STYLE}><VelocityValue value={video.derived.weeklyViewVelocity} /></td>
                   <td style={TD_STYLE}><VelocityValue value={video.derived.monthlyViewVelocity} /></td>
                 </tr>

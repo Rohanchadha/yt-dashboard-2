@@ -6,15 +6,16 @@ import { retentionData as mockRetention, videos as mockVideos } from "@/data/moc
 interface Props {
   data?: Record<string, string | number | null>[];
   videoMeta?: { title: string; color: string }[];
+  titleOverride?: string;
 }
 
-export default function RetentionCurves({ data, videoMeta }: Props) {
+export default function RetentionCurves({ data, videoMeta, titleOverride }: Props) {
   const chartData = data ?? mockRetention;
   const videos = videoMeta ?? mockVideos.map((v) => ({ title: v.titleShort, color: v.color }));
   return (
     <div className="card p-5">
       <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-        Audience Retention Curves (all {videos.length} videos)
+        {titleOverride ?? `Audience Retention Curves (all ${videos.length} videos)`}
       </h3>
       <ResponsiveContainer width="100%" height={320}>
         <LineChart data={chartData}>

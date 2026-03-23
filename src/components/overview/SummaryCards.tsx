@@ -5,7 +5,7 @@ export default function SummaryCards({ data }: { data?: SummaryMetrics }) {
   const m = data ?? mockMetrics;
 
   const cards = [
-    { label: "TOTAL VIEWS", value: m.totalViews.toLocaleString(), sub: `${m.engagedViews} engaged (${m.engagedPct}%)`, color: "var(--text-primary)" },
+    { label: "TOTAL VIEWS", value: m.totalViews.toLocaleString(), sub: "total plays in period", color: "var(--text-primary)" },
     { label: "WATCH TIME", value: `${m.watchTimeHours}h`, sub: `${m.watchTimeMinutes} minutes total`, color: "var(--text-primary)" },
     { label: "AVG VIEW DURATION", value: `0:${String(m.avgViewDurationSec).padStart(2, "0")}`, sub: `${m.avgViewDurationSec} seconds per view`, color: "#ef4444" },
     { label: "NET SUBSCRIBERS", value: `+${m.netSubscribers}`, sub: `${m.subsGained} gained, ${m.subsLost} lost`, color: "#22c55e" },

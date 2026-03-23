@@ -141,14 +141,14 @@ export async function GET(req: NextRequest) {
           filters: videoFilter,
         }),
       ),
-      // Extended metrics (impressions/CTR/avgViewPct — not available on all channels)
+      // Avg view percentage
       safeQuery(() =>
         youtubeAnalytics.reports.query({
           auth,
           ids: `channel==${channelId}`,
           startDate: from,
           endDate: to,
-          metrics: "impressions,impressionClickThroughRate,averageViewPercentage",
+          metrics: "averageViewPercentage",
           dimensions: "video",
           filters: videoFilter,
         }),
@@ -253,12 +253,11 @@ export async function GET(req: NextRequest) {
       periodMap[r[0] as string] = r;
     }
 
-    // Build extended metrics map: videoId → { impressions, ctr, avgViewPct }
-    // Row: [videoId, impressions, ctr, avgViewPct]
-    const extendedMap: Record<string, { impressions: number; ctr: number; avgViewPct: number }> = {};
+    // Build avgViewPercentage map: videoId → value
+    const avgViewPctMap: Record<string, number> = {};
     for (const row of extendedRows ?? []) {
-      const [videoId, impressions, ctr, avgViewPct] = row as [string, number, number, number];
-      if (videoId) extendedMap[videoId] = { impressions, ctr, avgViewPct };
+      const [videoId, avgViewPct] = row as [string, number];
+      if (videoId) avgViewPctMap[videoId] = avgViewPct;
     }
 
     const last7Map = indexByVideoId(last7Rows);
@@ -282,12 +281,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Channel avg CTR from extended metrics (null if unavailable)
-    const ctrs = Object.values(extendedMap)
-      .map((e) => e.ctr)
-      .filter((c) => c > 0);
-    const channelAvgCtr = ctrs.length > 0 ? ctrs.reduce((a, b) => a + b, 0) / ctrs.length : null;
-
     const videos = matchingIds.map((videoId, i) => {
       const r = periodMap[videoId];
       const views = (r?.[1] as number) ?? 0;
@@ -297,11 +290,6 @@ export async function GET(req: NextRequest) {
       const comments = (r?.[5] as number) ?? 0;
       const shares = (r?.[6] as number) ?? 0;
       const subsGained = (r?.[7] as number) ?? 0;
-
-      const ext = extendedMap[videoId];
-      const impressions = ext?.impressions ?? null;
-      const ctr = ext?.ctr ?? null;
-      const avgViewPct = ext?.avgViewPct ?? null;
 
       const publishedAt = publishedAtById[videoId] ?? new Date().toISOString();
       const totalViews = totalViewsMap[videoId] ?? Math.round(views);
@@ -315,8 +303,6 @@ export async function GET(req: NextRequest) {
         viewsLast7Days: last7Map[videoId] ?? null,
         priorWeekViews: prior7Map[videoId] ?? null,
         priorMonthViews: prior30Map[videoId] ?? null,
-        ctr: ctr ?? null,
-        channelAvgCtr,
       });
 
       return {
@@ -331,7 +317,6 @@ export async function GET(req: NextRequest) {
         totalComments: totalCommentsMap[videoId] ?? 0,
         durationSeconds: durationMap[videoId] ?? Math.round(avgDur),
         views: Math.round(views),
-        engaged: Math.round(views * 0.35),
         likes: Math.round(likes),
         comments: Math.round(comments),
         shares: Math.round(shares),
@@ -339,9 +324,7 @@ export async function GET(req: NextRequest) {
         avgDurationSec: Math.round(avgDur),
         subsGained: Math.round(subsGained),
         avgViewDurationSeconds: avgDur ? Math.round(avgDur) : null,
-        avgViewPercentage: avgViewPct != null ? Math.round(avgViewPct * 10) / 10 : null,
-        impressions: impressions != null ? Math.round(impressions) : null,
-        ctr: ctr != null ? Math.round(ctr * 1000) / 10 : null,
+        avgViewPercentage: avgViewPctMap[videoId] != null ? Math.round(avgViewPctMap[videoId] * 10) / 10 : null,
         viewsLast7Days: last7Map[videoId] ?? null,
         viewsLast28Days: last30Map[videoId] ?? null,
         viewsLast48Hours: last2Map[videoId] ?? null,

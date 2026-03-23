@@ -12,7 +12,6 @@ export default function TrafficTable({ data }: { data?: TrafficSource[] }) {
           <tr style={{ color: "var(--text-secondary)" }}>
             <th className="text-left py-2 font-semibold text-xs tracking-wider">SOURCE</th>
             <th className="text-right py-2 font-semibold text-xs tracking-wider">VIEWS</th>
-            <th className="text-right py-2 font-semibold text-xs tracking-wider">ENGAGED</th>
             <th className="text-right py-2 font-semibold text-xs tracking-wider">WATCH TIME</th>
             <th className="text-right py-2 font-semibold text-xs tracking-wider w-40">SHARE</th>
           </tr>
@@ -22,7 +21,6 @@ export default function TrafficTable({ data }: { data?: TrafficSource[] }) {
             <tr key={s.source} style={{ borderTop: "1px solid var(--border)" }}>
               <td className="py-3" style={{ color: "var(--text-primary)" }}>{s.source}</td>
               <td className="py-3 text-right font-semibold" style={{ color: "var(--text-primary)" }}>{s.views}</td>
-              <td className="py-3 text-right" style={{ color: "var(--text-secondary)" }}>{s.engaged}</td>
               <td className="py-3 text-right" style={{ color: "var(--text-secondary)" }}>{s.watchTimeHours}h</td>
               <td className="py-3">
                 <div className="flex items-center justify-end gap-2">

@@ -1,6 +1,6 @@
 "use client";
 
-export type Tab = "overview" | "video-performance" | "traffic-sources" | "audience" | "retention" | "key-insights";
+export type Tab = "overview" | "video-performance" | "traffic-sources" | "audience" | "retention" | "key-insights" | "glossary";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -9,6 +9,7 @@ const tabs: { id: Tab; label: string }[] = [
   { id: "audience", label: "Audience" },
   { id: "retention", label: "Retention" },
   { id: "key-insights", label: "Key Insights" },
+  { id: "glossary", label: "Glossary" },
 ];
 
 interface TabNavProps {

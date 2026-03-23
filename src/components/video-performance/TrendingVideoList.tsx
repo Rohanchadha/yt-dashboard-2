@@ -59,6 +59,7 @@ export default function TrendingVideoList({ data }: { data?: TrendingVideo[] }) 
   const trending = data ?? mockTrendingVideos;
   const [sortCol, setSortCol] = useState("48H VIEWS");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [infoExpanded, setInfoExpanded] = useState(false);
 
   const handleSort = (col: string) => {
     if (col === sortCol) {
@@ -115,10 +116,78 @@ export default function TrendingVideoList({ data }: { data?: TrendingVideo[] }) 
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        Ranked by views in the last 48 hours · velocity = last 48h ÷ prior 48h
-      </p>
+    <div className="flex flex-col gap-4">
+      {/* Info card */}
+      <div className="card overflow-hidden">
+        {/* Always-visible header row */}
+        <button
+          onClick={() => setInfoExpanded((v) => !v)}
+          className="w-full flex items-center justify-between px-5 py-3"
+          style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+        >
+          <div className="flex items-center gap-4 flex-wrap">
+            <span className="text-sm font-bold" style={{ color: "var(--text-primary)" }}>About this list</span>
+            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Sorted by <strong style={{ color: "var(--text-primary)" }}>48H VIEWS</strong> · velocity = recent 48h ÷ prior 48h ·{" "}
+              <span style={{ color: "#22c55e" }}>↑ &gt;1×</span> growing,{" "}
+              <span style={{ color: "#9ca3af" }}>→ ~1×</span> steady,{" "}
+              <span style={{ color: "#ef4444" }}>↓ &lt;1×</span> fading
+            </span>
+          </div>
+          <span className="text-xs ml-4 shrink-0" style={{ color: "var(--text-secondary)" }}>
+            {infoExpanded ? "▲ less" : "▼ more"}
+          </span>
+        </button>
+
+        {/* Expandable detail */}
+        {infoExpanded && (
+          <div
+            className="px-5 pb-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs"
+            style={{ color: "var(--text-secondary)", borderTop: "1px solid var(--border)" }}
+          >
+            <div className="flex flex-col gap-1 pt-4">
+              <div className="font-semibold" style={{ color: "var(--text-primary)" }}>Which videos appear here</div>
+              <p className="leading-relaxed">
+                Your top 200 most-viewed videos are checked across two back-to-back 48-hour snapshots. Any
+                video with views in <em>either</em> snapshot makes the list — including videos that were active
+                earlier but have since slowed down.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-4">
+              <div className="font-semibold" style={{ color: "var(--text-primary)" }}>The two 48-hour snapshots</div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-bold" style={{ color: "#06b6d4" }}>48H VIEWS</span>
+                  <span className="leading-relaxed">The more recent snapshot — views from 3 to 4 days ago. Your video's current activity level.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-bold" style={{ color: "var(--text-primary)" }}>PRIOR 48H</span>
+                  <span className="leading-relaxed">The older snapshot — views from 5 to 6 days ago. The baseline you are comparing against.</span>
+                </div>
+                <p className="leading-relaxed" style={{ opacity: 0.7 }}>
+                  Both windows are shifted ~2 days into the past because YouTube takes about 2 days to fully
+                  process view data. Querying today or yesterday would return incomplete numbers.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1 pt-4">
+              <div className="font-semibold" style={{ color: "var(--text-primary)" }}>Velocity — is it growing?</div>
+              <p className="leading-relaxed">
+                <strong style={{ color: "#22c55e" }}>↑ above 1×</strong> — more views in the recent snapshot than the prior one. Momentum is building.
+              </p>
+              <p className="leading-relaxed mt-1">
+                <strong style={{ color: "#9ca3af" }}>→ around 1×</strong> — roughly the same views in both snapshots. Holding steady.
+              </p>
+              <p className="leading-relaxed mt-1">
+                <strong style={{ color: "#ef4444" }}>↓ below 1×</strong> — fewer views in the recent snapshot. The video is losing traction.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="card" style={{ overflow: "auto", maxHeight: "70vh" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "auto" }}>
           <thead>

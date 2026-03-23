@@ -58,7 +58,6 @@ export async function GET(req: NextRequest) {
     return {
       source: SOURCE_LABELS[sourceType] ?? sourceType,
       views: Math.round(views),
-      engaged: Math.round(views * 0.35),
       watchTimeHours: Math.round((watchMins / 60) * 10) / 10,
       sharePct: totalViews > 0 ? Math.round((views / totalViews) * 1000) / 10 : 0,
       color: SOURCE_COLORS[sourceType] ?? "#6b7280",

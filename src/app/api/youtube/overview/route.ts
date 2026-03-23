@@ -54,7 +54,6 @@ export async function GET(req: NextRequest) {
       avgDurationSec: Math.round(avgDur),
       subsGained: sGained,
       subsLost: sLost,
-      engaged: Math.round(views * 0.35), // YouTube doesn't expose "engaged views" directly
     };
   });
 
@@ -70,8 +69,6 @@ export async function GET(req: NextRequest) {
       subsLost: Math.round(subsLost),
       likes: Math.round(likes),
       shares: Math.round(shares),
-      engagedViews: Math.round(totalViews * 0.35),
-      engagedPct: 35,
       likeRate: totalViews > 0 ? Math.round((likes / totalViews) * 1000) / 10 : 0,
       shareBreakdown: `${Math.round(shares)} total shares`,
     },

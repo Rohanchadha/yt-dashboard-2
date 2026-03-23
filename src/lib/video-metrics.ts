@@ -38,31 +38,26 @@ export function offsetDate(base: Date, days: number): string {
   return d.toISOString().split("T")[0];
 }
 
-export function classify(metrics: Omit<DerivedMetrics, "classification">): VideoClassification {
-  const {
-    eventScore,
-    evergreenScore,
-    weeklyViewVelocity,
-    monthlyViewVelocity,
-    ctrEfficiency,
-    viewsPerDayOfLife,
-  } = metrics;
+export function classify(
+  metrics: Omit<DerivedMetrics, "classification">,
+  ageInDays: number,
+): VideoClassification {
+  const { eventScore, evergreenScore, weeklyViewVelocity, viewsPerDayOfLife } = metrics;
 
-  // Not enough data (very new video or zero lifetime views)
-  if (viewsPerDayOfLife < 1 && weeklyViewVelocity === null) return "too_new";
+  // Not enough data — video published less than 7 days ago
+  if (ageInDays < 7) return "too_new";
 
-  // Event video: majority of views came in first 3 days
+  // Event video: majority of lifetime views came in the first 3 days
   if (eventScore !== null && eventScore > 70) return "event_video";
 
-  // Evergreen: still generating meaningful views 45+ days after publish
-  if (evergreenScore !== null && evergreenScore > 20 && (monthlyViewVelocity ?? 0) > 0.8)
-    return "evergreen";
+  // Evergreen: last-30d views ≥ 70% of average monthly views (age ≥ 90d)
+  if (evergreenScore !== null && evergreenScore >= 70) return "evergreen";
 
-  // Slow burn: currently gaining traction
-  if ((weeklyViewVelocity ?? 0) > 1.2 || (monthlyViewVelocity ?? 0) > 1.1) return "slow_burn";
+  // Slow burn: currently gaining traction week-over-week
+  if ((weeklyViewVelocity ?? 0) >= 1.2) return "slow_burn";
 
-  // Underperformer: low pace + below-avg CTR efficiency
-  if (viewsPerDayOfLife < 5 && (ctrEfficiency ?? 1) < 0.7) return "underperformer";
+  // Underperformer: low daily pace with no growth signal
+  if (viewsPerDayOfLife < 5) return "underperformer";
 
   return "unknown";
 }
@@ -76,8 +71,6 @@ export function computeDerived(params: {
   viewsLast7Days: number | null;
   priorWeekViews: number | null;
   priorMonthViews: number | null;
-  ctr: number | null;
-  channelAvgCtr: number | null;
 }): DerivedMetrics {
   const {
     totalViews,
@@ -88,8 +81,6 @@ export function computeDerived(params: {
     viewsLast7Days,
     priorWeekViews,
     priorMonthViews,
-    ctr,
-    channelAvgCtr,
   } = params;
 
   const publishedDate = new Date(publishedAt);
@@ -100,30 +91,31 @@ export function computeDerived(params: {
 
   const viewsPerDayOfLife = totalViews > 0 ? Math.round((totalViews / ageInDays) * 10) / 10 : 0;
 
+  // Only meaningful once the early launch spike has fully settled (≥ 7 days)
   const eventScore =
-    viewsFirst3Days !== null && totalViews > 0
+    viewsFirst3Days !== null && totalViews > 0 && ageInDays >= 7
       ? Math.round((viewsFirst3Days / totalViews) * 1000) / 10
       : null;
 
-  // evergreenScore only meaningful if video is 45+ days old
+  // Monthly Retention Ratio: last-30d views / avg-monthly-views × 100.
+  // A value of 100 means the video is exactly keeping its historical monthly pace.
+  // Only calculated at 90+ days so the avg-monthly baseline is not skewed by the launch spike.
+  const avgMonthlyViews = totalViews / (ageInDays / 30);
   const evergreenScore =
-    ageInDays >= 45 && viewsLast30Days !== null && totalViews > 0
-      ? Math.round((viewsLast30Days / totalViews) * 1000) / 10
+    ageInDays >= 90 && viewsLast30Days !== null && totalViews > 0
+      ? Math.round((viewsLast30Days / avgMonthlyViews) * 1000) / 10
       : null;
 
+  // Only reliable once the prior-week window is fully outside the launch period (> 15 days)
   const weeklyViewVelocity =
-    viewsLast7Days !== null && priorWeekViews !== null && priorWeekViews > 0
+    viewsLast7Days !== null && priorWeekViews !== null && priorWeekViews > 0 && ageInDays > 15
       ? Math.round((viewsLast7Days / priorWeekViews) * 100) / 100
       : null;
 
+  // Only meaningful once a full prior-month window exists (≥ 60 days)
   const monthlyViewVelocity =
-    viewsLast30Days !== null && priorMonthViews !== null && priorMonthViews > 0
+    viewsLast30Days !== null && priorMonthViews !== null && priorMonthViews > 0 && ageInDays >= 60
       ? Math.round((viewsLast30Days / priorMonthViews) * 100) / 100
-      : null;
-
-  const ctrEfficiency =
-    ctr !== null && channelAvgCtr !== null && channelAvgCtr > 0
-      ? Math.round((ctr / channelAvgCtr) * 100) / 100
       : null;
 
   const withoutClassification = {
@@ -131,12 +123,11 @@ export function computeDerived(params: {
     evergreenScore,
     weeklyViewVelocity,
     monthlyViewVelocity,
-    ctrEfficiency,
     viewsPerDayOfLife,
   };
 
   return {
     ...withoutClassification,
-    classification: classify(withoutClassification),
+    classification: classify(withoutClassification, ageInDays),
   };
 }

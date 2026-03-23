@@ -103,7 +103,8 @@ export default function VideoPerformanceTab({
       {/* Created in Period */}
       {subTab === "created" && (
         createdLoading ? (
-          <div className="card p-6 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <div className="card p-6 text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+            <span className="animate-spin inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent shrink-0" />
             Loading videos published in this period…
           </div>
         ) : (
@@ -114,7 +115,8 @@ export default function VideoPerformanceTab({
       {/* Trending */}
       {subTab === "trending" && (
         trendingLoading ? (
-          <div className="card p-6 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <div className="card p-6 text-sm flex items-center gap-2" style={{ color: "var(--text-secondary)" }}>
+            <span className="animate-spin inline-block w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent shrink-0" />
             Loading trending videos…
           </div>
         ) : (

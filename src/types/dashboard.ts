@@ -1,7 +1,5 @@
 export interface SummaryMetrics {
   totalViews: number;
-  engagedViews: number;
-  engagedPct: number;
   watchTimeHours: number;
   watchTimeMinutes: number;
   avgViewDurationSec: number;
@@ -17,7 +15,6 @@ export interface SummaryMetrics {
 export interface DailyPoint {
   date: string;
   views: number;
-  engaged: number;
   watchTimeHours: number;
   avgDurationSec: number;
   subsGained: number;
@@ -33,16 +30,14 @@ export type VideoClassification =
   | "unknown";
 
 export interface DerivedMetrics {
-  /** % of lifetime views that came in the first 3 days. null if publish date unknown or video too new. */
+  /** % of lifetime views that came in the first 3 days. null if video is < 7 days old. */
   eventScore: number | null;
-  /** % of lifetime views in the last 30 days. null if video is < 45 days old. */
+  /** Monthly Retention Ratio: (last30d views / avg-monthly-views) × 100. null if video is < 90 days old. 100 = on historical average pace. */
   evergreenScore: number | null;
-  /** last7d views / prior7d views. null if no prior-week data. */
+  /** last7d views / prior7d views. null if video is ≤ 15 days old or no prior-week data. */
   weeklyViewVelocity: number | null;
-  /** last30d views / prior30d views. null if no prior-month data. */
+  /** last30d views / prior30d views. null if video is < 60 days old or no prior-month data. */
   monthlyViewVelocity: number | null;
-  /** video CTR / mean CTR of the fetched batch. null if CTR unavailable. */
-  ctrEfficiency: number | null;
   /** total lifetime views / days since publish */
   viewsPerDayOfLife: number;
   classification: VideoClassification;
@@ -62,7 +57,6 @@ export interface VideoWithMetrics {
   durationSeconds: number;
   // Period analytics (Analytics API — selected period for top videos)
   views: number;
-  engaged: number;
   likes: number;
   comments: number;
   shares: number;
@@ -72,8 +66,6 @@ export interface VideoWithMetrics {
   // Deep analytics (Analytics API — fixed windows relative to today)
   avgViewDurationSeconds: number | null;
   avgViewPercentage: number | null;
-  impressions: number | null;
-  ctr: number | null;
   viewsLast7Days: number | null;
   viewsLast28Days: number | null;
   viewsLast48Hours: number | null;
@@ -98,7 +90,6 @@ export interface TrendingVideo {
 export interface TrafficSource {
   source: string;
   views: number;
-  engaged: number;
   watchTimeHours: number;
   sharePct: number;
   color: string;

@@ -245,13 +245,12 @@ Returns all videos **published** within the selected date range, with full deep 
    - Daily per-video breakdown (for first-3-days event score calculation)
 
 **Computed per video (via `computeDerived`):**
-- `eventScore` — % of lifetime views in first 3 days after publish
-- `evergreenScore` — % of lifetime views in last 30 days (only for videos ≥ 45 days old)
-- `weeklyViewVelocity` — last7d / prior7d views ratio
-- `monthlyViewVelocity` — last30d / prior30d views ratio
-- `ctrEfficiency` — video CTR / mean CTR of the fetched batch
+- `eventScore` — % of lifetime views in the first 3 days after publish. **Only calculated for videos ≥ 7 days old** (prevents misleading signals during the launch window). `null` otherwise.
+- `evergreenScore` (**Monthly Retention Ratio**) — `(viewsLast30d / avgMonthlyViews) × 100`. A score of 100 means the video is exactly keeping its historical monthly average. **Only calculated for videos ≥ 90 days old** so the baseline is not skewed by the launch spike. `null` otherwise.
+- `weeklyViewVelocity` — last7d / prior7d views ratio. **Only calculated for videos > 15 days old.** `null` otherwise.
+- `monthlyViewVelocity` — last30d / prior30d views ratio. **Only calculated for videos ≥ 60 days old.** `null` otherwise.
 - `viewsPerDayOfLife` — total lifetime views / days since publish
-- `classification` — `event_video | evergreen | slow_burn | underperformer | too_new | unknown`
+- `classification` — `event_video | evergreen | slow_burn | underperformer | too_new | unknown` (see classification rules below)
 
 **Response shape:**
 ```ts
@@ -268,10 +267,10 @@ Returns currently active videos ranked by 48h view velocity. Does not accept `fr
 
 **API calls made:**
 
-1. **`youtubeAnalytics.reports.query`** — top 25 videos by views in `last48h` window
-2. **`youtubeAnalytics.reports.query`** — top 25 videos by views in `prior48h` window
-3. **`youtube.videos.list`** — metadata for the union of video IDs
-4. **Four more analytics calls in parallel:** last 7d, prior 7d, last 30d, prior 30d views (for `computeDerived`)
+1. **`youtubeAnalytics.reports.query`** — top 200 videos by views in `last48h` window
+2. **`youtubeAnalytics.reports.query`** — top 200 videos by views in `prior48h` window
+3. **`youtube.videos.list`** (batched in chunks of 50) — metadata for the union of video IDs from both windows; the `youtube.videos.list` API accepts at most 50 IDs per request
+4. **Four batched analytics queries in parallel** (chunked at 50 IDs each to stay within URL length limits): last 7d, prior 7d, last 30d, prior 30d views per video (for `computeDerived`)
 
 **Velocity formula:**
 ```ts
@@ -396,7 +395,20 @@ Multi-step connectivity diagnostic — useful for troubleshooting auth issues. A
 | `indexByVideoId(rows, col?)` | Builds a `videoId → number` map from a YouTube Analytics rows array |
 | `offsetDate(base, days)` | Returns an ISO date string offset by N days from a given `Date` |
 | `computeDerived(params)` | Computes all `DerivedMetrics` fields (scores, velocities, classification) from raw inputs |
-| `classify(metrics)` | Maps computed metrics to a `VideoClassification` enum value |
+| `classify(metrics, ageInDays)` | Maps computed metrics to a `VideoClassification` enum value using the rules below |
+
+### Video Classification Rules
+
+Labels are evaluated in order — the first match wins:
+
+| Label | Condition | Notes |
+|---|---|---|
+| `too_new` | `ageInDays < 7` | Not enough data to classify |
+| `event_video` | `eventScore > 70%` | Majority of lifetime views came in the first 3 days |
+| `evergreen` | `age ≥ 90d AND evergreenScore ≥ 70` | Still pulling views at ≥ 70% of its historical monthly average |
+| `slow_burn` | `weeklyViewVelocity ≥ 1.2×` | Growing week-over-week |
+| `underperformer` | `viewsPerDayOfLife < 5` | Low daily pace with no growth signal |
+| `unknown` | _(fallthrough)_ | Doesn't meet any of the above criteria |
 
 ---
 
@@ -440,6 +452,7 @@ The Video Performance sub-tabs ("Created in Period" and "Trending") fetch their 
 **[Header.tsx](src/components/layout/Header.tsx)**
 - Displays channel name (from API, or mock name if not configured)
 - Date range `from` / `to` inputs (drives all data fetches)
+- Date range is capped at **60 days** — selecting a wider range shows an inline validation error and disables the Apply button
 - Dark / light theme toggle (sets `data-theme` attribute on `<html>`)
 
 **[TabNav.tsx](src/components/layout/TabNav.tsx)**
@@ -464,26 +477,29 @@ Has three sub-tabs:
 **Top Videos** (default)
 | Component | Chart type | Data shown |
 |---|---|---|
-| `VideoCard` | Metrics grid | Per-video: views, engaged, likes, comments, shares, watch time, avg duration, view share %, subs gained, impressions, CTR, avg view % |
+| `VideoCard` | Sortable table | Per-video: views, likes, comments, shares, watch time, avg duration, subs gained, avg view %, event score, evergreen score, last 30d views, avg monthly views, views/day, age, weekly velocity, monthly velocity, lifecycle classification |
 | `ViewsByVideoDonut` | Pie / donut | Views distribution across top 10 videos |
 | `EngagementComparison` | Grouped bar | Likes, Shares, Subs Gained compared across videos |
+
+Notes:
+- `UNKNOWN` classification renders as `—` rather than a badge
+- All 20 columns are sortable; default sort is by views descending
 
 **Created in Period** — videos published within the selected date range, fetched lazily from `/api/youtube/videos/created`
 | Component | Data shown |
 |---|---|
-| `CreatedInPeriodList` | Per-video card with deep analytics and `VideoClassification` badge |
+| `CreatedInPeriodList` | Same 20-column sortable table as Top Videos, filtered to videos published in the selected window |
 
 **Trending** — currently active videos, fetched lazily from `/api/youtube/videos/trending`
 | Component | Data shown |
 |---|---|
-| `TrendingVideoList` | Per-video card with 48h views, velocity ratio, and `VideoClassification` badge |
+| `TrendingVideoList` | Collapsible info card explaining the methodology + sortable table with 48h views, prior 48h views, velocity ratio, and lifecycle classification |
 
 #### Traffic Sources
 | Component | Chart type | Data shown |
 |---|---|---|
 | `TrafficDonut` | Pie / donut | Traffic source distribution by views |
-| `TrafficTable` | Table | Source, Views, Engaged, Watch Time, Share % (with inline bar) |
-| `DailyTrafficChart` | Stacked bar | Daily views broken down by traffic source |
+| `TrafficTable` | Table | Source, Views, Watch Time, Share % (with inline bar) |
 
 #### Audience
 | Component | Chart type | Data shown |
@@ -517,10 +533,11 @@ Auto-derived text insight cards computed from the loaded data ([src/components/k
 |---|---|---|
 | `isConfigured()` returns false | Every API route | Returns `HTTP 401 { error: "not_configured" }` immediately, no YouTube API call made |
 | `!f \|\| !t \|\| f > t` | `page.tsx` before fetch | Aborts — no API calls triggered |
+| Date range > 60 days | `Header.tsx` | Inline validation error shown, Apply button disabled — no API call made |
 | Any endpoint returns 401 | `page.tsx` after fetch | Sets `configured = false`, renders yellow warning banner, loads mock data |
 | `totalViews === 0` | `page.tsx` | Calls `/api/youtube/active-years` and renders a blue info banner with clickable year buttons |
 | Per-video retention query fails | `retention/route.ts` | Error silently swallowed via `.catch(() => ({ data: { rows: [] } }))` — tab still renders with remaining videos |
-| Extended metrics unavailable | `videos/created/route.ts` | `safeQuery` wrapper returns `null`; impressions/CTR/avgViewPct fields set to `null` on each video |
+| Extended metrics unavailable | `videos/created/route.ts` | `safeQuery` wrapper returns `null`; avgViewPct field set to `null` on each video |
 | Video title not found | `videos/route.ts`, `videos/created/route.ts`, `videos/trending/route.ts` | Falls back to `"Video 1"`, `"Video 2"`, etc. |
 
 ---
@@ -538,14 +555,15 @@ DailyPoint           // date, views, engaged, watchTimeHours, avgDurationSec, su
 
 VideoClassification  // "event_video" | "evergreen" | "slow_burn" | "underperformer" | "too_new" | "unknown"
 
-DerivedMetrics       // eventScore, evergreenScore, weeklyViewVelocity, monthlyViewVelocity,
-                     // ctrEfficiency, viewsPerDayOfLife, classification
+DerivedMetrics       // eventScore (null if < 7d old), evergreenScore/Monthly Retention Ratio (null if < 90d old),
+                     // weeklyViewVelocity (null if ≤ 15d old), monthlyViewVelocity (null if < 60d old),
+                     // viewsPerDayOfLife, classification
 
 VideoWithMetrics     // id, title, titleShort, color, isShort, publishedAt
                      // Lifetime: totalViews, totalLikes, totalComments, durationSeconds
-                     // Period: views, engaged, likes, comments, shares, watchTimeHours,
+                     // Period: views, likes, comments, shares, watchTimeHours,
                      //         avgDurationSec, subsGained
-                     // Deep: avgViewDurationSeconds, avgViewPercentage, impressions, ctr,
+                     // Deep: avgViewDurationSeconds, avgViewPercentage,
                      //       viewsLast7Days, viewsLast28Days, viewsLast48Hours
                      // derived: DerivedMetrics
 
