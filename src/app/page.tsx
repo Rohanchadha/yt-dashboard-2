@@ -197,7 +197,7 @@ export default function Home() {
       <main className="flex-1 p-6 max-w-[1400px] w-full mx-auto">
         {tab === "overview" && <OverviewTab summary={data?.summary} daily={data?.daily} />}
         {tab === "video-performance" && <VideoPerformanceTab data={data?.videos} from={from} to={to} />}
-        {tab === "traffic-sources" && <TrafficSourcesTab sources={data?.trafficSources} dailyTraffic={data?.dailyTraffic} />}
+        {tab === "traffic-sources" && <TrafficSourcesTab sources={data?.trafficSources} />}
         {tab === "audience" && <AudienceTab data={data?.audience} />}
         {tab === "retention" && <RetentionTab retentionData={data?.retentionData} relativeData={data?.relativeData} videoMeta={data?.videoMeta} from={from} to={to} channelIndex={channelIndex} />}
         {tab === "key-insights" && <KeyInsights data={data ?? undefined} />}
