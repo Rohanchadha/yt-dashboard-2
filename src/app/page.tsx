@@ -10,6 +10,7 @@ import AudienceTab from "@/components/audience/AudienceTab";
 import RetentionTab from "@/components/retention/RetentionTab";
 import KeyInsights from "@/components/key-insights/KeyInsights";
 import GlossaryTab from "@/components/glossary/GlossaryTab";
+import ContentHubTab from "@/components/content-hub/ContentHubTab";
 import type { DashboardData } from "@/types/dashboard";
 
 function toDateStr(d: Date) {
@@ -201,6 +202,7 @@ export default function Home() {
         {tab === "audience" && <AudienceTab data={data?.audience} />}
         {tab === "retention" && <RetentionTab retentionData={data?.retentionData} relativeData={data?.relativeData} videoMeta={data?.videoMeta} from={from} to={to} channelIndex={channelIndex} />}
         {tab === "key-insights" && <KeyInsights data={data ?? undefined} />}
+        {tab === "content-hub" && <ContentHubTab />}
         {tab === "glossary" && <GlossaryTab />}
       </main>
     </div>
