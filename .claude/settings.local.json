@@ -6,7 +6,21 @@
       "Bash(npm run:*)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
       "Bash(find /c/Users/rohan.chadha/10x/yt-dashboard-2 -name prisma.schema -o -name drizzle.config.* -o -name .env* -o -name package.json)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 33060 /F)",
+      "Bash(cmd.exe /c \"taskkill /PID 33060 /F\")",
+      "Bash(cmd.exe /c \"taskkill /PID 39036 /F\")",
+      "Bash(cmd.exe /c \"del /f /q \"\"c:\\\\Users\\\\rohan.chadha\\\\10x\\\\yt-dashboard-2\\\\.next\\\\dev\\\\logs\\\\next-development.log\"\"\")",
+      "Bash(cmd.exe /c \"tasklist /FI \"\"PID eq 39036\"\"\")",
+      "Bash(cmd.exe /c \"taskkill /IM node.exe /F 2>nul & del /f /q \"\"c:\\\\Users\\\\rohan.chadha\\\\10x\\\\yt-dashboard-2\\\\.next\\\\dev\\\\logs\\\\next-development.log\"\" 2>nul & echo done\")",
+      "Bash(cmd.exe /c \"taskkill /PID 33060 /F && echo killed\")",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :3000 | findstr LISTENING\")",
+      "Bash(cmd.exe /c \"taskkill /IM node.exe /F 2>nul & rmdir /s /q \"\"c:\\\\Users\\\\rohan.chadha\\\\10x\\\\yt-dashboard-2\\\\.next\"\" && echo cleared\")",
+      "Bash(cmd.exe /c \"taskkill /IM node.exe /F 2>nul & echo done\")",
+      "Bash(npx next:*)",
+      "Bash(cmd.exe /c \"tasklist /FI \"\"PID eq 33060\"\" /FO LIST\")",
+      "Bash(cmd.exe /c \"wmic process where ProcessId=33060 get Name,ExecutablePath,ProcessId 2>nul\")"
     ]
   }
 }

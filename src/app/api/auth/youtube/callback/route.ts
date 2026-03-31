@@ -17,16 +17,25 @@ export async function GET(req: NextRequest) {
   const auth = getOAuth2Client();
   const { tokens } = await auth.getToken(code);
 
-  // Log token server-side only — NEVER render it in HTML
   if (tokens.refresh_token) {
     console.log("\n========================================");
     console.log("YouTube OAuth: refresh token obtained.");
-    console.log("Add this to your .env.local:");
     console.log(`YOUTUBE_REFRESH_TOKEN=${tokens.refresh_token}`);
     console.log("========================================\n");
   } else {
     console.warn("No refresh token returned. Re-run auth with prompt=consent.");
   }
+
+  const tokenSection = tokens.refresh_token
+    ? `
+    <p class="step">Copy the token below and update your <span class="highlight">Vercel environment variable</span> (or <code>.env.local</code> for local dev).</p>
+    <div class="label">YOUTUBE_REFRESH_TOKEN</div>
+    <div class="token-box" id="token">${tokens.refresh_token}</div>
+    <button onclick="navigator.clipboard.writeText(document.getElementById('token').textContent).then(()=>this.textContent='Copied!')" class="copy-btn">Copy Token</button>
+    <div class="info-box">
+      In Vercel: <strong>Project Settings → Environment Variables</strong> → update <code>YOUTUBE_REFRESH_TOKEN</code>, then redeploy.
+    </div>`
+    : `<div class="info-box warn">No refresh token returned. This happens if you previously authorized this app. Go back and try again — Google will issue a new token with the <code>prompt=consent</code> parameter already set.</div>`;
 
   const html = `
 <!DOCTYPE html>
@@ -35,19 +44,23 @@ export async function GET(req: NextRequest) {
   <title>YouTube Connected</title>
   <style>
     body { font-family: system-ui; background: #0d1117; color: #f0f4ff; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-    .card { background: #161b27; border: 1px solid #2a3345; border-radius: 12px; padding: 32px; max-width: 600px; width: 100%; }
+    .card { background: #161b27; border: 1px solid #2a3345; border-radius: 12px; padding: 32px; max-width: 640px; width: 100%; }
     h2 { color: #22c55e; margin-top: 0; }
     .step { color: #8899bb; font-size: 14px; margin: 8px 0; }
     .highlight { color: #f59e0b; font-weight: bold; }
-    .info-box { background: #0d1117; border: 1px solid #2a3345; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; color: #06b6d4; margin: 16px 0; }
+    .label { font-size: 12px; color: #8899bb; margin-top: 16px; margin-bottom: 4px; }
+    .token-box { background: #0d1117; border: 1px solid #2a3345; border-radius: 8px; padding: 12px 16px; font-family: monospace; font-size: 12px; color: #06b6d4; word-break: break-all; }
+    .copy-btn { margin-top: 8px; background: #1e40af; color: #fff; border: none; border-radius: 6px; padding: 6px 16px; cursor: pointer; font-size: 13px; }
+    .copy-btn:hover { background: #1d4ed8; }
+    .info-box { background: #0d1117; border: 1px solid #2a3345; border-radius: 8px; padding: 16px; font-size: 13px; color: #8899bb; margin: 16px 0; }
+    .info-box.warn { border-color: #f59e0b44; color: #f59e0b; }
   </style>
 </head>
 <body>
   <div class="card">
     <h2>&#10003; YouTube Connected!</h2>
-    <p class="step">Your refresh token has been printed to the <span class="highlight">server terminal</span>.</p>
-    <div class="info-box">Check your terminal for the YOUTUBE_REFRESH_TOKEN value,<br>then add it to <strong>.env.local</strong> and restart the dev server.</div>
-    <p class="step">Once you have added the token, restart the dev server (<strong>Ctrl+C</strong> &rarr; <strong>npm run dev</strong>) and visit <a href="/" style="color:#06b6d4">the dashboard</a>.</p>
+    ${tokenSection}
+    <p class="step" style="margin-top:16px">After updating the environment variable, visit <a href="/" style="color:#06b6d4">the dashboard</a>.</p>
   </div>
 </body>
 </html>
